@@ -1,0 +1,39 @@
+import torch
+import torch.nn as nn
+import torchvision.models as models
+from torchsummary import summary
+
+class ReducedResNet18(nn.Module):
+    def __init__(self, num_classes=3, reduced_channels=512):
+        super(ReducedResNet18, self).__init__()
+
+        # Load the pre-trained ResNet18 model
+        resnet18 = models.resnet18(pretrained=True)
+
+        # Remove the fully connected layers at the end
+        self.features = nn.Sequential(*list(resnet18.children())[:-2])
+
+        # Modify the number of channels in the last convolutional layer
+        self.features[-1][-1].conv2 = nn.Conv2d(512, reduced_channels, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+
+        # Adjust batch normalization layers
+        self.features[-1][-1].bn2 = nn.BatchNorm2d(reduced_channels)
+
+        # Global average pooling
+        self.avgpool = nn.AdaptiveAvgPool2d(1)
+
+        # Fully connected layer
+        self.fc = nn.Linear(reduced_channels, num_classes)
+
+    def forward(self, x):
+        x = self.features(x)
+        x = self.avgpool(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        return x
+
+# Create an instance of the ReducedResNet18 model
+model = ReducedResNet18(num_classes=3, reduced_channels=256).cuda()
+
+# Print the model architecture
+#print(summary(model, (3, 80, 160), 1))
